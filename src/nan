@@ -1,0 +1,347 @@
+#!/usr/bin/python
+'''nansible - Nate's Ansible Deploy Tool
+
+USAGE: nansible -a action (other-flags)
+
+Where action is:
+    compile:      Compile source tree (but don't call ansible)
+                  Use --keep_compiled to see compiled tree
+    test_deploy:  Run deployment in test mode
+    deploy:       Compile, then deploy configuration
+    debug_parse:  Print listing of source files and how they are typed
+
+This tool provides the following features on top of ansible:
+
+  - The collection of roles into folders.
+    See Nansible README
+
+  - Automatic file renaming:
+      role/handlers.yml -> role/handlers/main.yml
+      role/tasks.yml -> role/tasks/main.yml
+      role/vars.yml -> role/vars/main.yml
+      role/meta.yml -> role/meta/main.yml
+
+  - Execution of autogen scripts
+
+nansible is expected to run from a folder with the structure of:
+
+   source/                    -->   compiled/
+    |--roles/                        |--roles/
+    |   `--standard_roles/...        |   |--standard_roles/...
+    |--projects/                     |   |--project_a__proj_role_a/
+    |   `--project_a/                |   `--project_a__proj_role_v/
+    |       |--proj_role_a/...       `--main.yml
+    |       |--proj_role_b/
+    |       |   `--tasks/
+    |       |       |--enabled.yml
+    |       |       |--disabled.yml
+    |       |       `--purged.yml
+    |       `--project.yml
+    |--main.yml
+    `--hosts
+
+'''
+import os
+import sys
+import gflags
+import shutil
+import tempfile
+import subprocess
+import yaml
+import stat
+
+from nansible.RootSourceFolder import RootSourceFolder
+
+
+gflags.DEFINE_string(
+    'cmpfolder',
+    short_name      = 'c',
+    default         = None,
+    help            = "Folder to compile ansible tree to")
+
+gflags.DEFINE_string(
+    'source',
+    short_name      = 's',
+    default         = './',
+    help            = "Ansible root folder")
+
+gflags.DEFINE_string(
+    'main',
+    short_name      = 'm',
+    default         = 'main.yml',
+    help            = "Ansible playbook to run")
+
+gflags.DEFINE_string(
+    'hostpat',
+    short_name      = 'h',
+    default         = None,
+    help            = "Hosts to apply to or 'local'")
+
+gflags.DEFINE_boolean(
+    'local',
+    default         = False,
+    help            = "Deploy locally")
+
+gflags.DEFINE_boolean(
+    'delete_compiled',
+    default         = False,
+    help            = "Delete the contents of the compile target if any exist")
+
+gflags.DEFINE_string(
+    'hostsfile',
+    short_name      = 'i',
+    default         = 'hosts',
+    help            = "Path to hosts file")
+
+
+gflags.DEFINE_enum(
+    'action',
+    short_name      = 'a',
+    default         = 'deploy',
+    help            = 'Action to perform',
+    enum_values     = ['deploy', 'compile', 'test_deploy', 'debug_parse'])
+gflags.MarkFlagAsRequired('action')
+
+gflags.DEFINE_boolean(
+    'verbose',
+    short_name      = 'v',
+    default         = False,
+    help            = "Show additional output")
+
+gflags.DEFINE_boolean(
+    'keep_compiled',
+    short_name      = 'k',
+    default         = False,
+    help            = "Don't delete compiled directory")
+
+gflags.DEFINE_boolean(
+    'hold_compiled',
+    short_name      = 'p',
+    default         = False,
+    help            = "Pause when complete to examine compiled source")
+
+gflags.DEFINE_boolean(
+    'sudo',
+    default         = False,
+    help            = "Pass --ask-sudo-pass to ansible")
+
+gflags.DEFINE_string(
+    'vault_password_file',
+    default         = None,
+    help            = "Path to vault password file to pass to ansible")
+
+gflags.DEFINE_boolean(
+    'vvv',
+    default         = False,
+    help            = "Pass --vvv to ansible")
+
+
+
+def new_phase(phase):
+    print ""
+    print "--", phase, "-"*(60-len(phase))
+
+
+def clean_out_compiled_folder(compile_folder):
+    for filename in os.listdir(compile_folder):
+        if filename not in ['.', '..']:
+            path = os.path.join(compile_folder, filename)
+            if os.path.isdir(path):
+                shutil.rmtree(path)
+            elif os.path.isfile(path):
+                os.unlink(path)
+
+
+if __name__ == '__main__':
+
+    # Parse arguments
+    try:
+        argv = gflags.FLAGS(sys.argv)
+        if len(argv) > 1:
+            raise gflags.FlagsError("Extra args: " + str(argv))
+        flags = gflags.FLAGS
+
+        # Determine source path
+        source_path = os.path.abspath(flags.source)
+        if not os.path.exists(source_path):
+            msg = "Source dir doesn't exist: %s"
+            raise gflags.FlagsError(msg % (source_path))
+
+    except gflags.FlagsError, e:
+        print 'USAGE ERROR: %s\n%s' % (e, gflags.FLAGS)
+        sys.exit(1)
+
+    do_compile = True
+    do_deploy = True
+
+    # -- Interpret source tree -----------------------------------------------
+    source = RootSourceFolder(source_path)
+    
+    # -- Debug the assigning of types to files in source tree ----------------
+    if flags.action == 'debug_parse':
+        new_phase("Debugging source parse tree")
+        for fobj in source.walk():
+            path = fobj.source_tree_path
+            if fobj.isdir:
+                path += '/'
+            
+            cname = fobj.__class__.__name__
+            
+            parent_cname = None
+            if fobj.parent is not None:
+                parent_cname = fobj.parent.__class__.__name__
+            
+            calc_method = None
+            if parent_cname is not None and fobj.isfile:
+                calc_method = '%s._get_file_type()' % (parent_cname)
+            elif parent_cname is not None and fobj.isdir:
+                calc_method = '%s._get_folder_type()' % (parent_cname)
+                
+            indent_depth = 0
+            parent = fobj.parent
+            while parent is not None:
+                indent_depth += 1
+                parent = parent.parent
+                
+            path = '%-30s' % ('  '*indent_depth + path)
+                
+            print path + "\t[%s] by %s" %(cname, str(calc_method))
+            
+            do_compile = False
+
+
+    # -- Compile source ------------------------------------------------------
+    
+    new_phase("Compiling")
+    compile_folder = None
+    created_compile_folder = False
+    
+    if do_compile:
+        
+        # Create compilation directory
+        compile_folder = flags.cmpfolder
+        if compile_folder is None:
+            compile_folder = tempfile.mkdtemp
+            created_compile_folder = True
+        else:
+            compile_folder_parent = os.path.dirname(compile_folder)
+            if not os.path.exists(compile_folder_parent):
+                msg = "Compile parent folder doesn't exist: "
+                print msg + compile_folder_parent
+                sys.exit(2)
+            if os.path.exists(compile_folder):
+                if len(list(os.listdir(compile_folder))) > 0:
+                    msg = "Compile folder exists and is not empty: "
+                    msg += compile_folder
+                    if flags.delete_compiled:
+                        print msg + " (deleting)"
+                        clean_out_compiled_folder(compile_folder)
+                    else:
+                        print msg + compile_folder
+                        sys.exit(2)
+                created_compile_folder = False
+            else:
+                os.mkdir(compile_folder)
+                created_compile_folder = True
+        compile_folder = os.path.abspath(compile_folder)
+
+        if flags.verbose:
+            print "Compiling from:", source
+            print "Compiling to:", compile_folder
+            print ""
+        
+        # Do Compile
+        def _compile_source_obj(source_obj, target_root):
+            print '[%s] %s' % (source_obj.__class__.__name__, source_obj.path)
+            source_obj.compile_to(target_root)
+            if source_obj.isdir:
+                for child in source_obj.listdir():
+                    _compile_source_obj(child, target_root)
+        _compile_source_obj(source, compile_folder)
+    else:
+        print "Compiling skipped"
+
+
+    # -- Validate Compiled Source --------------------------------------------
+
+    new_phase("Validating source")
+
+    if do_compile:
+        validation_errors = 0
+        def invalid(msg):
+            global validation_errors
+            validation_errors += 1
+            print "VALIDATION ERROR:", msg
+    
+        # Check for main.yml
+        main_path = os.path.join(compile_folder, flags.main)
+        if not os.path.exists(main_path):
+            invalid("%s doesn't exist" % (main_path))
+    
+        # Find hosts file
+        # Try relative to compiled root first
+        hosts_file = os.path.join(compile_folder, flags.hostsfile)
+        if not os.path.exists(hosts_file):
+            # Try absolute path
+            hosts_file = flags.hostsfile
+            if not os.path.exists(hosts_file):
+                invalid("Can't find hosts file")
+    
+        if validation_errors == 0:
+            print "no validation errors"
+        else:
+            print "%d validation errors" % (validation_errors)
+    
+    else:
+        print "Compiling was skipped, so skipping validation"
+    
+    # -- Deployment ----------------------------------------------------------
+
+    new_phase("Deploying")
+    rtncode = 0
+    
+    if do_compile and do_deploy:
+        start_dir = os.path.abspath(os.curdir)
+        cmd = [
+            '/usr/bin/ansible-playbook',
+            '-i', hosts_file
+            ]
+        if flags.sudo:
+            cmd.append('--ask-sudo-pass')
+        if flags.vault_password_file is not None:
+            cmd.extend(('--vault-password-file', flags.vault_password_file))
+        if flags.action == 'test_deploy':
+            cmd.append("--check")
+        cmd.append(main_path)
+        if flags.hostpat is not None:
+            cmd.extend(('-l', flags.hostpat))
+        
+        # Execute
+        if validation_errors == 0:
+            os.chdir(source_path)
+            if flags.action in ('deploy', 'test_deploy'):
+                print " ".join(cmd)
+                rtncode = subprocess.check_call(cmd,
+                    stdout=sys.stdout, stderr=sys.stderr, stdin=sys.stdin)
+                if rtncode != 0:
+                    print "ERROR: Ansible Failed"
+            os.chdir(start_dir)
+    else:
+        print "Deployment skipped"
+
+    # -- Clean Up ------------------------------------------------------------
+
+    if not flags.keep_compiled:
+        if flags.hold_compiled:
+            raw_input("(press enter to clean up)")
+        if created_compile_folder:
+            shutil.rmtree(compile_folder)
+        else:
+            if compile_folder is not None:
+                clean_out_compiled_folder(compile_folder)
+                os.unlink(compile_folder)
+    else:
+        print "Compiled files kept in %s" % (compile_folder)
+
+    sys.exit(rtncode)
+    
