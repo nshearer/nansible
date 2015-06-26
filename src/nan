@@ -97,7 +97,7 @@ gflags.DEFINE_string(
 gflags.DEFINE_enum(
     'action',
     short_name      = 'a',
-    default         = 'deploy',
+    default         = None,
     help            = 'Action to perform',
     enum_values     = ['deploy', 'compile', 'test_deploy', 'debug_parse'])
 gflags.MarkFlagAsRequired('action')
@@ -172,7 +172,7 @@ if __name__ == '__main__':
         sys.exit(1)
 
     do_compile = True
-    do_deploy = True
+    do_deploy = flags.action in ['deploy', 'test_deploy']
 
     # -- Interpret source tree -----------------------------------------------
     source = RootSourceFolder(source_path)
@@ -330,6 +330,8 @@ if __name__ == '__main__':
         print "Deployment skipped"
 
     # -- Clean Up ------------------------------------------------------------
+
+    new_phase("Finished.  Cleaning Up")
 
     if not flags.keep_compiled:
         if flags.hold_compiled:
