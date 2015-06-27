@@ -117,5 +117,17 @@ class SourceFile(object):
     def log(self, msg):
         if gflags.FLAGS.verbose:
             print "  " + msg
+            
+            
+    def get_validation_errors(self):
+        '''Any errors that should stop compilation'''
+        if False:
+            yield None
+            
+            
+    def get_validation_warnings(self):
+        '''Any warnings to display to user'''
+        if False:
+            yield None
 
 

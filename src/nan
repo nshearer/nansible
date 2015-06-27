@@ -1,13 +1,14 @@
 #!/usr/bin/python
 '''nansible - Nate's Ansible Deploy Tool
 
-USAGE: nansible -a action (other-flags)
+USAGE: nan action (other-flags)
 
 Where action is:
     compile:      Compile source tree (but don't call ansible)
                   Use --keep_compiled to see compiled tree
-    test_deploy:  Run deployment in test mode
-    deploy:       Compile, then deploy configuration
+    test:         Run deployment in test mode
+    remote:       Compile, then deploy configuration to remote host
+    local:        Compile, then deploy configuration to local host
     debug_parse:  Print listing of source files and how they are typed
 
 This tool provides the following features on top of ansible:
@@ -93,15 +94,6 @@ gflags.DEFINE_string(
     default         = 'hosts',
     help            = "Path to hosts file")
 
-
-gflags.DEFINE_enum(
-    'action',
-    short_name      = 'a',
-    default         = None,
-    help            = 'Action to perform',
-    enum_values     = ['deploy', 'compile', 'test_deploy', 'debug_parse'])
-gflags.MarkFlagAsRequired('action')
-
 gflags.DEFINE_boolean(
     'verbose',
     short_name      = 'v',
@@ -150,15 +142,42 @@ def clean_out_compiled_folder(compile_folder):
                 shutil.rmtree(path)
             elif os.path.isfile(path):
                 os.unlink(path)
-
-
+                
+                
 if __name__ == '__main__':
+
+    do_compile = True
+    do_deploy = False
 
     # Parse arguments
     try:
-        argv = gflags.FLAGS(sys.argv)
+        argv = sys.argv[1:]
+        
+        # Parse action first
+        action = None
+        valid_actions = (
+            'compile',
+            'test',
+            'remote',
+            'local',
+            'debug_parse',
+            )
+        if len(argv) > 0:
+            action = argv[0]
+            if action not in valid_actions:
+                raise gflags.FlagsError("Invalid action: " + action)
+        else:
+            raise gflags.FlagsError("Must specify action")
+            
+        # Parse gflags
+        argv = argv[1:]
+        argv.insert(0, sys.argv[0])
+        argv = gflags.FLAGS(argv)
+
+        # Check for extra args
         if len(argv) > 1:
             raise gflags.FlagsError("Extra args: " + str(argv))
+        
         flags = gflags.FLAGS
 
         # Determine source path
@@ -171,14 +190,11 @@ if __name__ == '__main__':
         print 'USAGE ERROR: %s\n%s' % (e, gflags.FLAGS)
         sys.exit(1)
 
-    do_compile = True
-    do_deploy = flags.action in ['deploy', 'test_deploy']
-
     # -- Interpret source tree -----------------------------------------------
     source = RootSourceFolder(source_path)
     
     # -- Debug the assigning of types to files in source tree ----------------
-    if flags.action == 'debug_parse':
+    if action == 'debug_parse':
         new_phase("Debugging source parse tree")
         for fobj in source.walk():
             path = fobj.source_tree_path
@@ -209,6 +225,20 @@ if __name__ == '__main__':
             
             do_compile = False
 
+
+    # -- Discover all source files -------------------------------------------
+    
+    all_source_objs = list()
+    all_source_stack = [source, ]
+    
+    while len(all_source_stack) > 0:
+        source_obj = all_source_stack.pop()
+        all_source_objs.append(source_obj)
+        if source_obj.isdir:
+            for child in reversed(list(source_obj.listdir())):
+                all_source_stack.append(child)
+
+    del all_source_stack
 
     # -- Compile source ------------------------------------------------------
     
@@ -246,18 +276,15 @@ if __name__ == '__main__':
         compile_folder = os.path.abspath(compile_folder)
 
         if flags.verbose:
-            print "Compiling from:", source
+            print "Compiling from:", source.path
             print "Compiling to:", compile_folder
             print ""
         
         # Do Compile
-        def _compile_source_obj(source_obj, target_root):
+        for source_obj in all_source_objs:
             print '[%s] %s' % (source_obj.__class__.__name__, source_obj.path)
-            source_obj.compile_to(target_root)
-            if source_obj.isdir:
-                for child in source_obj.listdir():
-                    _compile_source_obj(child, target_root)
-        _compile_source_obj(source, compile_folder)
+            source_obj.compile_to(compile_folder)
+            
     else:
         print "Compiling skipped"
 
@@ -266,32 +293,47 @@ if __name__ == '__main__':
 
     new_phase("Validating source")
 
+    has_validation_error = False
+
     if do_compile:
-        validation_errors = 0
-        def invalid(msg):
-            global validation_errors
-            validation_errors += 1
-            print "VALIDATION ERROR:", msg
-    
-        # Check for main.yml
+        
+        def print_validation_errors(source_path, errors=None, warnings=None):
+            global has_validation_error
+            if errors is None:
+                errors = list()
+            if warnings is None:
+                warnings = list()
+            if len(errors) > 0 or len(warnings) > 0:
+                print ""
+                print source_path + ' has validation errors:'
+                for msg in errors:
+                    print " - ERROR: " + msg
+                    has_validation_error = True
+                for msg in warnings:
+                    print " - " + msg
+                    
+        
+        # Global check: Check for main.yml
         main_path = os.path.join(compile_folder, flags.main)
         if not os.path.exists(main_path):
-            invalid("%s doesn't exist" % (main_path))
-    
-        # Find hosts file
-        # Try relative to compiled root first
+            errors = ["%s is missing (specify with --main)" % (flags.main), ]
+            print_validation_errors(main_path, errors=errors)
+            
+        # Check for hosts file
         hosts_file = os.path.join(compile_folder, flags.hostsfile)
         if not os.path.exists(hosts_file):
             # Try absolute path
             hosts_file = flags.hostsfile
             if not os.path.exists(hosts_file):
-                invalid("Can't find hosts file")
-    
-        if validation_errors == 0:
-            print "no validation errors"
-        else:
-            print "%d validation errors" % (validation_errors)
-    
+                errors = ["Can't find hosts (specify with --hostsfile)", ]
+                print_validation_errors(main_path, errors=errors)
+                
+
+        # Check each 
+        for source_obj in all_source_objs:
+            errors = list(source_obj.get_validation_errors())
+            warnings = list(source_obj.get_validation_warnings())
+            print_validation_errors(main_path, errors, warnings)
     else:
         print "Compiling was skipped, so skipping validation"
     
@@ -300,7 +342,7 @@ if __name__ == '__main__':
     new_phase("Deploying")
     rtncode = 0
     
-    if do_compile and do_deploy:
+    if not has_validation_error and do_compile and do_deploy:
         start_dir = os.path.abspath(os.curdir)
         cmd = [
             '/usr/bin/ansible-playbook',
@@ -310,22 +352,23 @@ if __name__ == '__main__':
             cmd.append('--ask-sudo-pass')
         if flags.vault_password_file is not None:
             cmd.extend(('--vault-password-file', flags.vault_password_file))
-        if flags.action == 'test_deploy':
+        if action == 'test_deploy':
             cmd.append("--check")
         cmd.append(main_path)
         if flags.hostpat is not None:
             cmd.extend(('-l', flags.hostpat))
         
         # Execute
-        if validation_errors == 0:
-            os.chdir(source_path)
-            if flags.action in ('deploy', 'test_deploy'):
-                print " ".join(cmd)
-                rtncode = subprocess.check_call(cmd,
-                    stdout=sys.stdout, stderr=sys.stderr, stdin=sys.stdin)
-                if rtncode != 0:
-                    print "ERROR: Ansible Failed"
-            os.chdir(start_dir)
+        os.chdir(source_path)
+        if action in ('deploy', 'test_deploy'):
+            print " ".join(cmd)
+            rtncode = subprocess.check_call(cmd,
+                stdout=sys.stdout, stderr=sys.stderr, stdin=sys.stdin)
+            if rtncode != 0:
+                print "ERROR: Ansible Failed"
+        os.chdir(start_dir)
+    elif has_validation_error:
+        print "Deployment skipped do to validation errors"
     else:
         print "Deployment skipped"
 
