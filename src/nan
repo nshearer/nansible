@@ -193,28 +193,37 @@ if __name__ == '__main__':
     # -- Interpret source tree -----------------------------------------------
     source = RootSourceFolder(source_path)
     
+    def recurse_source_objs(source_obj):
+        yield source_obj
+        if source_obj.isdir:
+            for child in source_obj.listdir():
+                for grandchild in recurse_source_objs(child):
+                    yield grandchild
+    all_source_objs = list(recurse_source_objs(source))
+
+
     # -- Debug the assigning of types to files in source tree ----------------
     if action == 'debug_parse':
         new_phase("Debugging source parse tree")
-        for fobj in source.walk():
-            path = fobj.source_tree_path
-            if fobj.isdir:
+        for source_obj in all_source_objs:
+            path = source_obj.source_tree_path
+            if source_obj.isdir:
                 path += '/'
             
-            cname = fobj.__class__.__name__
+            cname = source_obj.__class__.__name__
             
             parent_cname = None
-            if fobj.parent is not None:
-                parent_cname = fobj.parent.__class__.__name__
+            if source_obj.parent is not None:
+                parent_cname = source_obj.parent.__class__.__name__
             
             calc_method = None
-            if parent_cname is not None and fobj.isfile:
+            if parent_cname is not None and source_obj.isfile:
                 calc_method = '%s._get_file_type()' % (parent_cname)
-            elif parent_cname is not None and fobj.isdir:
+            elif parent_cname is not None and source_obj.isdir:
                 calc_method = '%s._get_folder_type()' % (parent_cname)
                 
             indent_depth = 0
-            parent = fobj.parent
+            parent = source_obj.parent
             while parent is not None:
                 indent_depth += 1
                 parent = parent.parent
@@ -225,20 +234,6 @@ if __name__ == '__main__':
             
             do_compile = False
 
-
-    # -- Discover all source files -------------------------------------------
-    
-    all_source_objs = list()
-    all_source_stack = [source, ]
-    
-    while len(all_source_stack) > 0:
-        source_obj = all_source_stack.pop()
-        all_source_objs.append(source_obj)
-        if source_obj.isdir:
-            for child in reversed(list(source_obj.listdir())):
-                all_source_stack.append(child)
-
-    del all_source_stack
 
     # -- Compile source ------------------------------------------------------
     
@@ -294,11 +289,16 @@ if __name__ == '__main__':
     new_phase("Validating source")
 
     has_validation_error = False
-
+    valid_error_cnt = 0
+    valid_warn_cnt = 0
+    
     if do_compile:
         
         def print_validation_errors(source_path, errors=None, warnings=None):
             global has_validation_error
+            global valid_error_cnt
+            global valid_warn_cnt
+            
             if errors is None:
                 errors = list()
             if warnings is None:
@@ -309,9 +309,10 @@ if __name__ == '__main__':
                 for msg in errors:
                     print " - ERROR: " + msg
                     has_validation_error = True
+                    valid_error_cnt += 1
                 for msg in warnings:
                     print " - " + msg
-                    
+                    valid_warn_cnt += 1
         
         # Global check: Check for main.yml
         main_path = os.path.join(compile_folder, flags.main)
@@ -326,16 +327,27 @@ if __name__ == '__main__':
             hosts_file = flags.hostsfile
             if not os.path.exists(hosts_file):
                 errors = ["Can't find hosts (specify with --hostsfile)", ]
-                print_validation_errors(main_path, errors=errors)
+                print_validation_errors(hosts_file, errors=errors)
                 
-
-        # Check each 
+        # Check each source object
         for source_obj in all_source_objs:
             errors = list(source_obj.get_validation_errors())
             warnings = list(source_obj.get_validation_warnings())
             print_validation_errors(main_path, errors, warnings)
+            
+        # Give summary
+        print ""
+        if valid_error_cnt > 0:
+            print "%d VALIDATION ERRORS" % (valid_error_cnt)
+        elif valid_warn_cnt > 0:
+            print "%d validation warnigns" % (valid_warn_cnt)
+        else:
+            print "No valication errors"
+            
     else:
         print "Compiling was skipped, so skipping validation"
+        
+    
     
     # -- Deployment ----------------------------------------------------------
 

@@ -36,29 +36,41 @@ class SourceFolder(SourceFile):
         folder = self.corresponding_target_folder
         target_path = os.path.join(target_root, folder)
         self.log("mkdir %s/" % (target_path))
-        os.mkdir(target_path)
+        self._mkdir(target_path)
 
 
     # -- Sub files/folders ----------------------------------------------------        
 
     def listdir(self):
         '''List all file and folders under this folder (as SourceFile)'''
-        for filename in os.listdir(self.path):
+        folders = list()
+        files = list()
+        
+        for filename in sorted(os.listdir(self.path)):
             if filename not in ['.', '..']:
                 path = os.path.join(self.path, filename)
-                source_tree_path = os.path.join(self.source_tree_path, filename)
-                
-                ftype = None
                 if os.path.isdir(path):
-                    ftype = self._get_folder_type(filename)
+                    folders.append(filename)
                 elif os.path.isfile(path):
-                    ftype = self._get_file_type(filename)
+                    files.append(filename)
                 else:
-                    print "WARNING: Skipping odd file object: " + path
-                    
-                if ftype is not None:
-                    subclass = self.SUB_CLASSES[ftype]
-                    yield subclass(path, source_tree_path, parent=self)
+                    print "WARNING: Unknown file object type: " + path
+                
+        for foldername in folders:
+            path = os.path.join(self.path, foldername)
+            source_tree_path = os.path.join(self.source_tree_path, foldername)
+            ftype = self._get_folder_type(foldername)
+            if ftype is not None:
+                subclass = self.SUB_CLASSES[ftype]
+                yield subclass(path, source_tree_path, parent=self)
+        
+        for filename in files:
+            path = os.path.join(self.path, filename)
+            source_tree_path = os.path.join(self.source_tree_path, filename)
+            ftype = self._get_file_type(filename)
+            if ftype is not None:
+                subclass = self.SUB_CLASSES[ftype]
+                yield subclass(path, source_tree_path, parent=self)
 
 
     def _get_folder_type(self, filename):

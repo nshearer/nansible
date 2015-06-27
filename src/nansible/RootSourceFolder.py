@@ -37,5 +37,5 @@ class RootSourceFolder(SourceFolder):
     @property
     def corresponding_target_folder(self):
         '''Path in the target directory to create'''
-        return None
+        return ''
     
