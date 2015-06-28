@@ -15,8 +15,6 @@ class RootSourceFolder(SourceFolder):
 
     
     def _get_file_type(self, filename):
-        if filename == gflags.FLAGS.main:
-            return 'MainFile'
         return super(RootSourceFolder, self)._get_file_type(filename)
 
 
@@ -24,7 +22,7 @@ class RootSourceFolder(SourceFolder):
         if filename == 'roles':
             return 'RolesFolder'
         if filename == 'projects':
-            return 'ProjectsFolder'
+            return 'IgnoredFolder' # TODO: 'ProjectsFolder'
         else:
             return SourceFolder._get_folder_type(self, filename)
 

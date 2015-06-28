@@ -2,7 +2,6 @@
 
 from nansible.SourceFile import SourceFile
 from nansible.SourceFolder import SourceFolder
-from nansible.MainFile import MainFile
 from nansible.RolesFolder import RolesFolder
 from nansible.RoleFolder import RoleFolder
 from nansible.ProjectsFolder import ProjectsFolder
@@ -23,7 +22,6 @@ from nansible.IgnoredFolder import IgnoredFolder
 SourceFile.SUB_CLASSES = {
     'SourceFile':               SourceFile,
     'SourceFolder':             SourceFolder,
-    'MainFile':                 MainFile,
     'RolesFolder':              RolesFolder,
     'RoleFolder':               RoleFolder,
     'ProjectsFolder':           ProjectsFolder,

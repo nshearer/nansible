@@ -12,11 +12,12 @@ class ProjectsFolder(SourceFolder):
         return 'ProjectFolder'
 
 
-    # Don't create a folder in compiled for this
     def compile_to(self, target_root):
-        pass
+        pass # TODO
+    
     @property
     def corresponding_target_folder(self):
         '''Path in the target directory to create (relative to target root)'''
-        return None
+        #return None # Projects doesn't really have a counterpart in target
+        return 'projects'
     

@@ -52,7 +52,7 @@ import yaml
 import stat
 
 from nansible.RootSourceFolder import RootSourceFolder
-
+from nansible.main_template import write_main_file
 
 gflags.DEFINE_string(
     'cmpfolder',
@@ -67,10 +67,16 @@ gflags.DEFINE_string(
     help            = "Ansible root folder")
 
 gflags.DEFINE_string(
-    'main',
-    short_name      = 'm',
+    'play',
+    short_name      = 'p',
     default         = 'main.yml',
-    help            = "Ansible playbook to run")
+    help            = "Ansible playbook to call when deploying")
+
+# gflags.DEFINE_string(
+#     'project_play',
+#     short_name      = 'n',
+#     default         = 'nan_projects.yml',
+#     help            = "Name of playbook to create for include projects")
 
 gflags.DEFINE_string(
     'hostpat',
@@ -105,12 +111,6 @@ gflags.DEFINE_boolean(
     short_name      = 'k',
     default         = False,
     help            = "Don't delete compiled directory")
-
-gflags.DEFINE_boolean(
-    'hold_compiled',
-    short_name      = 'p',
-    default         = False,
-    help            = "Pause when complete to examine compiled source")
 
 gflags.DEFINE_boolean(
     'sudo',
@@ -185,6 +185,16 @@ if __name__ == '__main__':
         if not os.path.exists(source_path):
             msg = "Source dir doesn't exist: %s"
             raise gflags.FlagsError(msg % (source_path))
+        
+#         # Check projects playbook name
+#         if os.path.exists(os.path.join(source_path, flags.project_play)):
+#             msg = "%s already exists in source.  Won't overwrite"
+#             raise gflags.FlagsError(msg % (flags.project_play))
+
+        # Check main playbook name
+        if not os.path.exists(os.path.join(source_path, flags.play)):
+            msg = "%s does not exist in source"
+            raise gflags.FlagsError(msg % (flags.play))
 
     except gflags.FlagsError, e:
         print 'USAGE ERROR: %s\n%s' % (e, gflags.FLAGS)
@@ -280,6 +290,10 @@ if __name__ == '__main__':
             print '[%s] %s' % (source_obj.__class__.__name__, source_obj.path)
             source_obj.compile_to(compile_folder)
             
+#         # Create projects playbook for inclusion
+#         proj_play_path = os.path.join(compile_folder, flags.project_play)
+#         write_main_file(main_path)
+            
     else:
         print "Compiling skipped"
 
@@ -313,12 +327,6 @@ if __name__ == '__main__':
                 for msg in warnings:
                     print " - " + msg
                     valid_warn_cnt += 1
-        
-        # Global check: Check for main.yml
-        main_path = os.path.join(compile_folder, flags.main)
-        if not os.path.exists(main_path):
-            errors = ["%s is missing (specify with --main)" % (flags.main), ]
-            print_validation_errors(main_path, errors=errors)
             
         # Check for hosts file
         hosts_file = os.path.join(compile_folder, flags.hostsfile)
@@ -333,7 +341,7 @@ if __name__ == '__main__':
         for source_obj in all_source_objs:
             errors = list(source_obj.get_validation_errors())
             warnings = list(source_obj.get_validation_warnings())
-            print_validation_errors(main_path, errors, warnings)
+            print_validation_errors(source_obj.path, errors, warnings)
             
         # Give summary
         print ""
@@ -366,7 +374,7 @@ if __name__ == '__main__':
             cmd.extend(('--vault-password-file', flags.vault_password_file))
         if action == 'test_deploy':
             cmd.append("--check")
-        cmd.append(main_path)
+        cmd.append(os.path.join(compile_folder, flags.play))
         if flags.hostpat is not None:
             cmd.extend(('-l', flags.hostpat))
         
