@@ -6,7 +6,8 @@ USAGE: nan action (other-flags)
 Where action is:
     compile:      Compile source tree (but don't call ansible)
                   Use --keep_compiled to see compiled tree
-    test:         Run deployment in test mode
+    test_remote:  Run deployment in test mode to remote host
+    test_local:   Run deployment in test mode on local host
     remote:       Compile, then deploy configuration to remote host
     local:        Compile, then deploy configuration to local host
     debug_parse:  Print listing of source files and how they are typed
@@ -157,7 +158,8 @@ if __name__ == '__main__':
         action = None
         valid_actions = (
             'compile',
-            'test',
+            'test_remote',
+            'test_local',
             'remote',
             'local',
             'debug_parse',
@@ -168,6 +170,9 @@ if __name__ == '__main__':
                 raise gflags.FlagsError("Invalid action: " + action)
         else:
             raise gflags.FlagsError("Must specify action")
+        
+        if action in ['remote', 'local', 'test_remote', 'test_local']:
+            do_deploy = True
             
         # Parse gflags
         argv = argv[1:]
@@ -195,6 +200,12 @@ if __name__ == '__main__':
         if not os.path.exists(os.path.join(source_path, flags.play)):
             msg = "%s does not exist in source"
             raise gflags.FlagsError(msg % (flags.play))
+
+        # If deploying to remote, than hostpat is required
+        if action == 'remote':
+            if flags.hostpat is None:
+                msg = "--hostpat is required for action: remote"
+                raise gflags.FlagsError(msg)
 
     except gflags.FlagsError, e:
         print 'USAGE ERROR: %s\n%s' % (e, gflags.FLAGS)
@@ -364,6 +375,7 @@ if __name__ == '__main__':
     
     if not has_validation_error and do_compile and do_deploy:
         start_dir = os.path.abspath(os.curdir)
+        os.chdir(compile_folder)
         cmd = [
             '/usr/bin/ansible-playbook',
             '-i', hosts_file
@@ -372,20 +384,19 @@ if __name__ == '__main__':
             cmd.append('--ask-sudo-pass')
         if flags.vault_password_file is not None:
             cmd.extend(('--vault-password-file', flags.vault_password_file))
-        if action == 'test_deploy':
-            cmd.append("--check")
-        cmd.append(os.path.join(compile_folder, flags.play))
+        if action.startswith('test'):
+            cmd.append("--check") 
+        cmd.append(flags.play)
         if flags.hostpat is not None:
             cmd.extend(('-l', flags.hostpat))
         
         # Execute
-        os.chdir(source_path)
-        if action in ('deploy', 'test_deploy'):
-            print " ".join(cmd)
-            rtncode = subprocess.check_call(cmd,
-                stdout=sys.stdout, stderr=sys.stderr, stdin=sys.stdin)
-            if rtncode != 0:
-                print "ERROR: Ansible Failed"
+        print " ".join(cmd)
+        rtncode = subprocess.check_call(cmd,
+            stdout=sys.stdout, stderr=sys.stderr, stdin=sys.stdin)
+        if rtncode != 0:
+            print "ERROR: Ansible Failed"
+            
         os.chdir(start_dir)
     elif has_validation_error:
         print "Deployment skipped do to validation errors"
