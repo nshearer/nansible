@@ -267,7 +267,7 @@ if __name__ == '__main__':
         # Create compilation directory
         compile_folder = flags.cmpfolder
         if compile_folder is None:
-            compile_folder = tempfile.mkdtemp
+            compile_folder = tempfile.mkdtemp()
             created_compile_folder = True
         else:
             compile_folder_parent = os.path.dirname(compile_folder)
@@ -389,6 +389,8 @@ if __name__ == '__main__':
         cmd.append(flags.play)
         if flags.hostpat is not None:
             cmd.extend(('-l', flags.hostpat))
+        else:
+            cmd.append('--connection=local')
         
         # Execute
         print " ".join(cmd)
@@ -408,8 +410,6 @@ if __name__ == '__main__':
     new_phase("Finished.  Cleaning Up")
 
     if not flags.keep_compiled:
-        if flags.hold_compiled:
-            raw_input("(press enter to clean up)")
         if created_compile_folder:
             shutil.rmtree(compile_folder)
         else:
