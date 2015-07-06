@@ -1,0 +1,67 @@
+'''nan_task - Task templates for formatting Ansible TasksShortcutFile
+
+USAGE: nan_task template (options)
+   or: nan_task list
+
+I find the ansible format for defining tasks to be confusing at times.
+This script simply provides a mechanism for creating tasks wizard style.
+'''
+
+import os
+import sys
+import gflags
+
+from nansible import tpl
+from nansible.tpl.TaskWizardBase import WizardException
+from py_wizard.runner import run_wizard
+
+def print_template_names():
+    print "Valid template names are:"
+    for name in sorted(tpl.ALL_TEMPLATES):
+        desc = tpl.ALL_TEMPLATES.ALL_TEMPLATES[name]
+        print "  %-15s %s" % (name + ':', desc)
+    print ""
+
+
+if __name__ == '__main__':
+
+    # Parse arguments
+    try:
+        argv = sys.argv[1:]
+        
+        # Parse template name first
+        template_name = None
+        if len(argv) > 0:
+            template_name = argv[0]
+            if template_name == 'list':
+                print_template_names()
+                sys.exit(0)
+            if template_name not in tpl.ALL_TEMPLATES.keys():
+                msg = "Invalid template name: " + template_name
+                msg += ".  Try: nan_task list"
+                raise gflags.FlagsError(msg)
+        else:
+            raise gflags.FlagsError("Must specify template name (or list)")
+            
+        # Parse gflags
+        argv = argv[1:]
+        argv.insert(0, sys.argv[0])
+        argv = gflags.FLAGS(argv)
+
+        # Check for extra args
+        if len(argv) > 1:
+            raise gflags.FlagsError("Extra args: " + str(argv))
+        
+        flags = gflags.FLAGS
+
+    except gflags.FlagsError, e:
+        print 'USAGE ERROR: %s\n%s' % (e, gflags.FLAGS)
+        sys.exit(1)
+        
+    # Start Wizard
+    try:
+        wizard = tpl.ALL_TEMPLATES[template_name]()
+        run_wizard(wizard)
+    except WizardException, e:
+        print "ERROR: " + str(e)
+        sys.exit(2)
