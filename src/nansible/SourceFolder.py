@@ -74,6 +74,8 @@ class SourceFolder(SourceFile):
 
 
     def _get_folder_type(self, filename):
+        if filename == 'roles':
+            return 'RolesFolder'
         return 'SourceFolder'
     
     

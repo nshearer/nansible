@@ -5,12 +5,14 @@ Setup script for deploying nansible
 
 from distutils.core import setup
 
-VERSION='0.0.1'
+VERSION='0.0.4'
 PACKAGES=[
     'nansible',
+    'nansible.tpl',
     ]
 SCRIPTS=[
     'nan',
+    'nan_task',
     ]
 
 setup(name='nansible',
@@ -18,6 +20,9 @@ setup(name='nansible',
       author='Nathan Shearer',
       author_email='shearern@gmail.com',
       url='https://github.com/nshearer/nansible',
+      
+      requires= ['PyWizard', ],
+      
       version=VERSION,
       packages=PACKAGES,
       scripts=SCRIPTS

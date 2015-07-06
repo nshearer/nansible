@@ -1,3 +1,4 @@
+#!/usr/bin/python
 '''nan_task - Task templates for formatting Ansible TasksShortcutFile
 
 USAGE: nan_task template (options)
