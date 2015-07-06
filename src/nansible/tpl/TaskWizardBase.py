@@ -34,7 +34,7 @@ class TaskWizardBase(PyMainWizard):
         # Generate source
         parms = Bunch()
         self.ask_template_questions(parms)
-        source = dedent(self.gen_ansible(parms))
+        source = dedent(self.gen_ansible(parms)).strip()
 
         # -- Common Questions -------------------------------------------------
 
@@ -47,14 +47,14 @@ class TaskWizardBase(PyMainWizard):
             
         # Run as sudo?
         if self.ask_yes_no('sudo', "Run this configuration as sudo?"):
-            source = source + "\n" + "sudo: yes"
+            source = source.rstrip() + "\n" + "sudo: yes"
             
         # Notify service handler?
         notify = self.ask_simple("notify",
             "Run handler after this task?",
             optional=True)
         if notify:
-            source =source + "\n" + "notify: " + notify
+            source = source.rstrip() + "\n" + "notify: " + notify
             
         # -- Append to tasks file ---------------------------------------------
         
@@ -131,7 +131,7 @@ class TaskWizardBase(PyMainWizard):
             optional=False)
         
         
-    def _select_source_file(self, in_dir):
+    def _select_source_file(self, in_dir, allow_dir=False):
         '''Select the source file to use out of the given directory'''
         
         candidates = os.listdir(in_dir)
@@ -139,11 +139,25 @@ class TaskWizardBase(PyMainWizard):
             "Select source file in %s" % (in_dir),
             options=candidates)
         source_path = os.path.join(in_dir, source_file)
+        
+        # If Directory:
         if os.path.isdir(source_path):
-            sub_file = self._select_source_file(source_path)
-            return os.path.join(source_file, sub_file)
+            if allow_dir:
+                recurse = self.ask_yes_no('use dir: %s' % (in_dir),
+                    "Recurse into %s?" % (source_path))
+            else:
+                recurse = True
+            
+            if recurse:
+                sub_file = self._select_source_file(source_path)
+                return os.path.join(source_file, sub_file)
+            else:
+                return source_file
+        
+        # If File:
         elif os.path.isfile(source_path):
             return source_file
+        
         else:
             raise WizardException("Not a file or dir: " + source_path)
         
