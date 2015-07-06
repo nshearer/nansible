@@ -5,14 +5,15 @@ Nate's Ansible deployment script with additional source compilation tools.
 
 USAGE: nan action (other-flags)
 
-Where action is:
-    compile:      Compile source tree (but don't call ansible)
+Where action is one of:
+
+  - compile:      Compile source tree (but don't call ansible)
                   Use --keep_compiled to see compiled tree
-    test_remote:  Run deployment in test mode to remote host
-    test_local:   Run deployment in test mode on local host
-    remote:       Compile, then deploy configuration to remote host
-    local:        Compile, then deploy configuration to local host
-    debug_parse:  Print listing of source files and how they are typed
+  - test_remote:  Run deployment in test mode to remote host
+  - test_local:   Run deployment in test mode on local host
+  - remote:       Compile, then deploy configuration to remote host
+  - local:        Compile, then deploy configuration to local host
+  - debug_parse:  Print listing of source files and how they are typed
 
 This tool provides the following features on top of ansible:
 
