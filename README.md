@@ -30,19 +30,19 @@ This tool provides the following features on top of ansible:
 
 nansible is expected to run from a folder with the structure of:
 
-   source/                    -->   compiled/
-    |--roles/                        |--roles/
-    |   `--standard_roles/...        |   |--standard_roles/...
-    |--projects/                     |   |--project_a__proj_role_a/
-    |   `--project_a/                |   `--project_a__proj_role_v/
-    |       |--proj_role_a/...       `--main.yml
-    |       |--proj_role_b/
-    |       |   `--tasks/
-    |       |       |--enabled.yml
-    |       |       |--disabled.yml
-    |       |       `--purged.yml
-    |       `--project.yml
-    |--main.yml
-    `--hosts
+    source/                    -->   compiled/
+     |--roles/                        |--roles/
+     |   `--standard_roles/...        |   |--standard_roles/...
+     |--projects/                     |   |--project_a__proj_role_a/
+     |   `--project_a/                |   `--project_a__proj_role_v/
+     |       |--proj_role_a/...       `--main.yml
+     |       |--proj_role_b/
+     |       |   `--tasks/
+     |       |       |--enabled.yml
+     |       |       |--disabled.yml
+     |       |       `--purged.yml
+     |       `--project.yml
+     |--main.yml
+     `--hosts
 
 *projects is still under review.  Not sure if I need this feature*
