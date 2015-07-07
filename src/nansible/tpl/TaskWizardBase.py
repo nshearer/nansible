@@ -14,6 +14,11 @@ class Bunch:
         self.__dict__.update(kwds)
 
 
+def append_to_task(task_source, new_src):
+    '''Append new source to the end of existing source'''
+    return task_source.rstrip() + "\n" + new_src
+
+
 class TaskWizardBase(PyMainWizard):
     '''Wizard for generating tasks'''
     __metaclass__ = ABCMeta
@@ -29,7 +34,7 @@ class TaskWizardBase(PyMainWizard):
     def execute(self):
         '''Run the wizard'''
         tasks_file = self._select_tasks_file()
-        tasks_indent = self._determine_task_file_indent(tasks_file)
+        self._determine_task_file_indent(tasks_file) # Just to make sure we can
 
         # Generate source
         parms = Bunch()
@@ -43,34 +48,42 @@ class TaskWizardBase(PyMainWizard):
             "Description of task (printed when ansible runs)",
             optional=True)
         if description is not None:
-            source = 'name: %s\n' % (description) + source
+            source = append_to_task('name: %s' % (description), source)
             
         # Run as sudo?
         if self.ask_yes_no('sudo', "Run this configuration as sudo?"):
-            source = source.rstrip() + "\n" + "sudo: yes"
+            source = append_to_task(source, "sudo: yes")
             
         # Notify service handler?
         notify = self.ask_simple("notify",
             "Run handler after this task?",
             optional=True)
         if notify:
-            source = source.rstrip() + "\n" + "notify: " + notify
-            
-        # -- Append to tasks file ---------------------------------------------
+            source = append_to_task(source, "notify: " + notify)
+    
+        # Write to file
+        print "Appending new task to", tasks_file
+        self._append_task_to_file(tasks_file, source)
+        
+    
+    def _append_task_to_file(self, path, source):
+        '''Append a new task to the given tasks YAML file'''
+        existing_indent = self._determine_task_file_indent(path)
         
         # Indent source to make it a list item
         new_source = list()
         for i, line in enumerate(dedent(source).split("\n")):
             if i == 0:
-                new_source.append(tasks_indent + '- ' + line.rstrip())
+                new_source.append(existing_indent + '- ' + line.rstrip())
             else:
-                new_source.append(tasks_indent + '  ' + line.rstrip())
+                new_source.append(existing_indent + '  ' + line.rstrip())
         source = "\n".join(new_source).rstrip()
 
         # Write to file
-        print "Appending new task to", tasks_file
-        with open(tasks_file, 'at') as fh:
+        with open(path, 'at') as fh:
             fh.write("\n" + source + "\n")
+            
+    
                 
         
     @abstractmethod

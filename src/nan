@@ -394,9 +394,10 @@ if __name__ == '__main__':
         
         # Execute
         print " ".join(cmd)
-        rtncode = subprocess.check_call(cmd,
-            stdout=sys.stdout, stderr=sys.stderr, stdin=sys.stdin)
-        if rtncode != 0:
+        try:
+            subprocess.check_call(cmd,
+                stdout=sys.stdout, stderr=sys.stderr, stdin=sys.stdin)
+        except subprocess.CalledProcessError:
             print "ERROR: Ansible Failed"
             
         os.chdir(start_dir)
