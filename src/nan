@@ -208,7 +208,7 @@ if __name__ == '__main__':
                 raise gflags.FlagsError(msg)
 
     except gflags.FlagsError, e:
-        print 'USAGE ERROR: %s\n%s' % (e, gflags.FLAGS)
+        print 'USAGE ERROR: %s\n\n%s\n%s' % (e, __doc__, gflags.FLAGS)
         sys.exit(1)
 
     # -- Interpret source tree -----------------------------------------------
