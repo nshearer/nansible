@@ -19,7 +19,7 @@ from py_wizard.runner import run_wizard
 def print_template_names():
     print "Valid template names are:"
     for name in sorted(tpl.ALL_TEMPLATES):
-        desc = tpl.ALL_TEMPLATES.ALL_TEMPLATES[name]
+        desc = tpl.ALL_TEMPLATES[name].TASK_DESC
         print "  %-15s %s" % (name + ':', desc)
     print ""
 
