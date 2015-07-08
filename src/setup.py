@@ -5,7 +5,7 @@ Setup script for deploying nansible
 
 from distutils.core import setup
 
-VERSION='0.0.6'
+VERSION='0.0.7'
 PACKAGES=[
     'nansible',
     'nansible.tpl',
