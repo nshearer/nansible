@@ -202,9 +202,9 @@ if __name__ == '__main__':
             raise gflags.FlagsError(msg % (flags.play))
 
         # If deploying to remote, than hostpat is required
-        if action == 'remote':
+        if 'remote' in action:
             if flags.hostpat is None:
-                msg = "--hostpat is required for action: remote"
+                msg = "--hostpat is required for action: " + action
                 raise gflags.FlagsError(msg)
 
     except gflags.FlagsError, e:
