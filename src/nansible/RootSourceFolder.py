@@ -15,7 +15,10 @@ class RootSourceFolder(SourceFolder):
 
     
     def _get_file_type(self, filename):
-        return super(RootSourceFolder, self)._get_file_type(filename)
+        if filename[0] == '.':
+            return 'IgnoredFile'
+        else:
+            return super(RootSourceFolder, self)._get_file_type(filename)
 
 
     def _get_folder_type(self, filename):
@@ -23,6 +26,8 @@ class RootSourceFolder(SourceFolder):
             return 'RolesFolder'
 #         if filename == 'projects':
 #             return 'IgnoredFolder' # TODO: 'ProjectsFolder'
+        if filename[0] == '.':
+            return 'IgnoredFolder'
         else:
             return SourceFolder._get_folder_type(self, filename)
 

@@ -120,6 +120,7 @@ gflags.DEFINE_boolean(
 
 gflags.DEFINE_string(
     'vault_password_file',
+    short_name      = 'V',
     default         = None,
     help            = "Path to vault password file to pass to ansible")
 
@@ -298,7 +299,8 @@ if __name__ == '__main__':
         
         # Do Compile
         for source_obj in all_source_objs:
-            print '[%s] %s' % (source_obj.__class__.__name__, source_obj.path)
+            if flags.verbose:
+                print '[%s] %s' % (source_obj.__class__.__name__, source_obj.path)
             source_obj.compile_to(compile_folder)
             
 #         # Create projects playbook for inclusion
